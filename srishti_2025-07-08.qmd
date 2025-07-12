@@ -1,0 +1,459 @@
+---
+title: "Cognitive Aging in Healthy Adults"
+author: "Srishti Chowdhary"
+format: 
+  html:
+    self-contained: true
+    code-fold: true
+    code-summary: "Show the code"
+editor: visual
+---
+
+## Introduction
+
+Cognitive tests have traditionally been used to identify pathological impairment, such as mild cognitive impairment (MCI) or dementia. However, the **Precision Aging Study** aims to shift the focus toward understanding **normal cognitive aging**, which may require the development of newer tools for measuring cognitive function beyond traditional tests.
+
+This project seeks to evaluate the relationship between neurophycologic tests that measure impairment (MoCA) to tests that focus on very specific tasks. The Paired Associates test measures short term memory (<http://help.cambridgebrainsciences.com/en/articles/705727-what-is-the-paired-associates-test>); The Paired Associate Learning test (PAL) which measures visual memory and new learning (<https://cambridgecognition.com/paired-associates-learning-pal/>); and Keep Track task, which measures executive function.
+
+In addition, we investigate associations between these cognitive performance measure and factors known to influence cognitive health, including: cardiovascular health and other demographic data.
+
+## Research Questions
+
+1.  How correlated are the visual memory and executive function tests (PAL and Keep Track) with the short-term memory test (Paired Associates), and do these associations differ between individuals classified as MCI versus Robust based on MoCA scores?
+
+2.  Is there an association between performance on the PAL and Keep Track tasks and baseline demographic variables (age, sex, BMI), as well as the presence of hypertension?
+
+    This is particularly relevant given existing evidence that cardiovascular conditions may influence cognitive function.
+
+### Demographics
+
+**Age**:Self-reported in years
+
+**Sex**: Biological sex at birth (0 = Male, 1 = Female)
+
+**BMI**: Body Mass Index
+
+### Health History
+
+**Heart Disease:** 0 = No, does not have it, 1 = Yes, does have it
+
+**Hypertension:** 0 = No, 1 = Yes
+
+**Stroke:** 0 = No, 1 = Yes
+
+**Sleep Problems**: 0 = No, 1 = Yes
+
+### Cognitive Measures
+
+**MoCA Total Score:** 0-30 composite score
+
+**Flanker Test:** Congruent and Incongruent correct responses
+
+**Keep Track Task**: Total correct across categories
+
+**Word Pairs:** Memory total correct (Paired Associates Learning or PAL)
+
+## Table 1
+
+Table 1 presents descriptive statistics for demographic, cognitive, and health-related variables, stratified by MoCA-defined cognitive status (**MCI** vs. **Robust**). Variables include age, sex, body mass index (BMI), and performance on cognitive tasks (Keep Track, Paired Associates, PAL). A Cardiovascular risk factor such as hypertension is also summarized. The stratification allows for comparison between groups with potential cognitive impairment (MoCA \< 26) and those with normal cognitive functioning or Robust (MoCA ≥ 26).
+
+#### Load Libraries and Read Data
+
+```{r read_data}
+#| message: false
+#| warning: false
+# Load libraries
+library (table1)
+library (rms)
+library(ggpubr)
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+
+
+# Load dataset
+data <- read.csv("~/Downloads/KEYS 2025/keys2025data copy.csv")
+
+# Make groups
+data$moca_list <- ifelse(data$moca_total < 26, "MCI", "Robust")
+
+# Remove missing data (Rename the variable and do moca_list to moca_total)
+data <- subset(data, !is.na(moca_total))
+
+# Make labeled factors 
+data$health_medical_heart_disease <- factor(data$health_medical_heart_disease,
+                                            levels = c(0, 1),
+                                            labels = c("No", "Yes"))
+data$health_medical_hypertension <- factor(data$health_medical_hypertension,
+                                           levels = c(0, 1),
+                                           labels = c("No", "Yes"))
+data$health_medical_stroke <- factor(data$health_medical_stroke,
+                                     levels = c(0, 1),
+                                     labels = c("No", "Yes"))
+data$health_medical_sleep_problems <- factor(data$health_medical_sleep_problems,
+                                             levels = c(0, 1),
+                                             labels = c("No", "Yes"))
+
+# label variables
+table1::label(data$age) <- "Age"
+table1::label(data$sex) <- "Sex"
+table1::label(data$bmi) <- "BMI"
+table1::label(data$FLK_Cong_Count_Correct) <- "Flanker Congruent Correct"
+table1::label(data$FLK_Inc_Count_Correct) <- "Flanker Incongruent Correct"
+table1::label(data$KT_Total_Correct) <- "Keep Track"
+table1::label(data$memory_totalcorrect) <- "Paired Associates"
+table1::label(data$health_medical_heart_disease) <- "Heart Disease"
+table1::label(data$health_medical_hypertension) <- "Hypertension"
+table1::label(data$health_medical_stroke) <- "Stroke"
+table1::label(data$health_medical_sleep_problems) <- "Sleep Problems"
+table1::label(data$WP_Total_Easy_Correct) <- "Word Pairs easy"
+table1::label(data$WP_Total_Hard_Correct) <- "Word Pairs Hard"
+```
+
+#### Create Table 1
+
+```{r table1}
+# print table 1
+table1(~ age + sex + bmi +  memory_totalcorrect + KT_Total_Correct + WP_Total_Hard_Correct + health_medical_hypertension | moca_list,
+       data = data, render.missing = NULL, render.continuous="Mean(SD)")
+```
+
+# Methods
+
+For question 1 we use a method called Analysis of Covariance - where we examine the difference in association between two variables using an "interaction" term between MoCA and the x-variable (PAL and Flanker compared to Paired Associates) adjusting for another variable (MoCA).
+
+For question 2 we use multiple linear regression.
+
+```{r fig0, include=FALSE}
+#| warning: false
+ggplot(data = data, aes(x = log(KT_Total_Correct), y = memory_totalcorrect)) +
+  stat_smooth(method = "lm", se = FALSE, color = "black", formula = y ~ x) +
+  geom_point() +
+  stat_cor(aes(label = paste(..rr.label.., ..p.label.., sep = "~`,`~")),
+           r.accuracy = 0.01, p.accuracy = 0.001,
+           label.x = min(data$KT_Total_Correct, na.rm = TRUE) + 0.2, 
+           label.y = max(data$memory_totalcorrect, na.rm = TRUE) - 2, size = 4) +
+  stat_regline_equation(aes(label = ..eq.label..),
+                        label.x = min(data$KT_Total_Correct, na.rm = TRUE) + 0.2, label.y = max(data$memory_totalcorrect, na.rm = TRUE), size = 4) +
+  theme_bw() +
+  facet_wrap(~moca_list) +
+  labs(title = "Paired Associates vs. Keep Track",
+       x = "Keep Track Total Correct",
+       y = "Paired Associates")
+```
+
+```{r fig0.1, include=FALSE}
+#| warning: false
+ggplot(data = data, aes(x = WP_Total_Easy_Correct, y = memory_totalcorrect)) +
+  stat_smooth(method = "lm", se = FALSE, color = "black", formula = y ~ x) +
+  geom_point() +
+  stat_cor(aes(label = paste(..rr.label.., ..p.label.., sep = "~`,`~")),
+           r.accuracy = 0.01, p.accuracy = 0.001,
+           label.x = 5, label.y = max(data$memory_totalcorrect, na.rm = TRUE) - 2, size = 4) +
+  stat_regline_equation(aes(label = ..eq.label..),
+                        label.x = 5, label.y = max(data$memory_totalcorrect, na.rm = TRUE), size = 4) +
+  theme_bw() +
+  facet_wrap(~moca_list) +
+  labs(title = "Paired Associates vs. Word Pairs Easy",
+       x = "Word Pairs Easy Total Correct",
+       y = "Paired Associates")
+```
+
+```{r fig0.2, include=FALSE}
+#| warning: false
+ggplot(data = data, aes(x = WP_Total_Hard_Correct, y = memory_totalcorrect)) +
+  stat_smooth(method = "lm", se = FALSE, color = "black", formula = y ~ x) +
+  geom_point() +
+  stat_cor(aes(label = paste(..rr.label.., ..p.label.., sep = "~`,`~")),
+           r.accuracy = 0.01, p.accuracy = 0.001,
+           label.x = 5, label.y = max(data$memory_totalcorrect, na.rm = TRUE) - 2, size = 4) +
+  stat_regline_equation(aes(label = ..eq.label..),
+                        label.x = 5, label.y = max(data$memory_totalcorrect, na.rm = TRUE), size = 4) +
+  theme_bw() +
+  facet_wrap(~moca_list) +
+  labs(title = "Paired Associates vs. Word Pairs Hard",
+       x = "Word Pairs Hard Total Correct",
+       y = "Paired Associates")
+```
+
+```{r dataset1,include=FALSE}
+# Subset only the variables needed for the analysis
+data.subset <- subset(data, select = c(KT_Total_Correct, WP_Total_Hard_Correct, age, sex, bmi, health_medical_hypertension))
+
+data.subset$KT_Total_Correct <- as.numeric(data.subset$KT_Total_Correct)
+data.subset$WP_Total_Hard_Correct <- as.numeric(data.subset$WP_Total_Hard_Correct)
+
+# Convert categorical variables to factors
+data.subset$sex <- factor(data.subset$sex, labels = c("Male", "Female"))
+data.subset$health_medical_hypertension <- factor(data.subset$health_medical_hypertension, labels = c("No", "Yes"))
+
+# Create the long-format dataset
+data.graph <- pivot_longer(
+  data.subset,
+  cols = c(KT_Total_Correct, WP_Total_Hard_Correct),
+  names_to = "cogtest",
+  values_to = "score"
+)
+
+# Clean up cogtest names for plotting
+data.graph$cogtest <- recode(data.graph$cogtest,
+                              "KT_Total_Correct" = "Keep Track",
+                              "WP_Total_Hard_Correct" = "Paired Associates")
+
+# Check the resulting dataset
+head(data.graph)
+```
+
+```{r cogtestandage, include=FALSE}
+ggplot(data.graph, aes(x = age, y = score)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE, color = "black") +
+  facet_wrap(~cogtest) +
+  theme_bw() +
+  labs(title = "Cognitive Test Scores by Age",
+       x = "Age",
+       y = "Cognitive Test Score")
+```
+
+```{r cogtestandBMI, include=FALSE}
+ggplot(data.graph, aes(x = bmi, y = score)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE, color = "black") +
+  facet_wrap(~cogtest) +
+  theme_bw() +
+  labs(title = "Cognitive Test Scores by BMI",
+       x = "BMI",
+       y = "Cognitive Test Score")
+```
+
+```{r cogtestandsex, include=FALSE}
+ggplot(data.graph, aes(x = factor(sex), y = score)) +
+  geom_boxplot() +
+  facet_wrap(~cogtest) +
+  theme_bw() +
+  labs(title = "Cognitive Test Scores by Sex",
+       x = "Sex",
+       y = "Score")
+```
+
+```{r cogtestandhyper, include=FALSE}
+ggplot(data.graph, aes(x = factor(health_medical_hypertension), y = score)) +
+  geom_boxplot() +
+  facet_wrap(~cogtest) +
+  theme_bw() +
+  labs(title = "Cognitive Test Scores by Hypertension",
+       x = "Hypertension",
+       y = "Score")
+```
+
+# Results
+
+We explored associations between cognitive test scores and demographic and cardiovascular variables using linear regression models. Visual and statistical analyses focused on how age, BMI, sex, and hypertension relate to performance on the Keep Track (executive function) and PAL (visual memory) tasks. Differences by cognitive status (MCI vs. Robust, based on MoCA) were also examined.
+
+```{r question 1 for Keep Track, include=FALSE}
+ggplot(data = data, aes(x = KT_Total_Correct, y = memory_totalcorrect)) +
+  stat_smooth(method = "lm", se = FALSE, color = "black", formula = y ~ x) +
+  geom_point() + 
+
+  theme_bw() +
+  facet_wrap(~moca_list) +
+  labs(title = "Paired Associates vs. Keep Track",
+       x = "Keep Track Total Correct",
+       y = "Paired Associates")
+
+## another way to do this plot
+
+  
+  ggplot(data=data, aes(x=KT_Total_Correct, y=memory_totalcorrect, group=moca_list, color=moca_list)) +
+  geom_smooth(method=lm, se=F) +
+  geom_point(size=3) +
+  scale_color_manual(values=c("steelblue", "gray")) + 
+  theme_classic() +
+  labs(x="Keep Track Task", y = "Paired Associates Test") + theme(legend.position = "bottom")
+  
+  # and we can save this as a .png graph so it will look better on your poster
+  
+  png("Figure 1. Keep Track versus Paired Associates by MoCA.png")
+ ggplot(data=data, aes(x=KT_Total_Correct, y=memory_totalcorrect, group=moca_list, color=moca_list)) +
+  geom_smooth(method=lm, se=F) +
+  geom_point(size=3) +
+  scale_color_manual(values=c("steelblue", "gray")) + 
+  theme_classic() +
+  labs(x="Keep Track Task", 
+       y = "Paired Associates Test") + theme(legend.position = "bottom")
+  dev.off()
+
+
+
+analysis.data <- subset(data, select = c(memory_totalcorrect, moca_list, KT_Total_Correct))
+
+ancova.kt <- ols(log(memory_totalcorrect+.001) ~ moca_list*KT_Total_Correct, data=analysis.data)
+ancova.kt
+
+```
+
+```{r question 2 for PAL, include=FALSE}
+ggplot(data = data, aes(x = WP_Total_Hard_Correct, y = memory_totalcorrect)) +
+  stat_smooth(method = "lm", se = FALSE, color = "black", formula = y ~ x) +
+  geom_point() +
+
+  theme_bw() +
+  facet_wrap(~moca_list) +
+  labs(title = "Paired Associates vs. PAL",
+       x = "Word Pairs Hard (PAL)",
+       y = "Paired Associates")
+
+## another way to do this plot
+  
+  ggplot(data=data, aes(x=WP_Total_Hard_Correct, y=log(memory_totalcorrect), group=moca_list, color=moca_list)) +
+  geom_smooth(method=lm, se=F) +
+  geom_point(size=3) +
+  scale_color_manual(values=c("steelblue", "gray")) + 
+  theme_classic() +
+  labs(x="log(Word Pairs Hard (PAL))", 
+       y = "Paired Associates Test") + theme(legend.position = "bottom")
+  
+  # and we can save this as a .png graph so it will look better on your poster
+  
+  png("Figure 1. PAL versus Paired Associates by MoCA.png", res = 300)
+ ggplot(data=data, aes(x=WP_Total_Hard_Correct, y=log(memory_totalcorrect), group=moca_list, color=moca_list)) +
+  geom_smooth(method=lm, se=F) +
+  geom_point(size=3) +
+  scale_color_manual(values=c("steelblue", "gray")) + 
+  theme_classic() +
+  labs(x="log(Word Pairs Hard (PAL))", 
+       y = "Paired Associates Test") + theme(legend.position = "bottom")
+  
+
+dev.off()
+
+analysis.data <- subset(data, select = c(memory_totalcorrect, moca_list, WP_Total_Hard_Correct))
+
+ancova.wp <- ols(log(memory_totalcorrect+.001) ~ moca_list*WP_Total_Hard_Correct, data=analysis.data)
+ancova.wp
+```
+
+#### Interactions plots
+
+The following plots illustrate the relationship between performance on the **Paired Associates memory test** and two specific cognitive tasks: the **Keep Track task** (executive function) and the **Paired Associates Learning (PAL) task** (visual memory and new learning). Each plot is stratified by **MoCA group** (Robust vs. MCI) to visualize potential group differences. Regression lines help show trends across the two cognitive status groups, and the combined plot includes a shared legend for comparison.
+
+```{r combine plots}
+#| message: false
+#| warning: false
+library(ggplot2)
+library(ggpubr)
+
+# Individual Plot 1: Keep Track vs. Paired Associates
+plot_kt <- ggplot(data = data, aes(x = KT_Total_Correct, y = memory_totalcorrect, group = moca_list, color = moca_list)) +
+  geom_smooth(method = lm, se = FALSE) +
+  geom_point(size = 3) +
+  scale_color_manual(values = c("steelblue", "gray")) +
+  theme_classic() +
+  labs(
+    title = "Keep Track vs. Paired Associates",
+    x = "Keep Track Task",
+    y = "Paired Associates Test"
+  )
+
+# Individual Plot 2: PAL vs. Paired Associates
+plot_pal <- ggplot(data = data, aes(x = WP_Total_Hard_Correct, y = log(memory_totalcorrect), group = moca_list, color = moca_list)) +
+  geom_smooth(method = lm, se = FALSE) +
+  geom_point(size = 3) +
+  scale_color_manual(values = c("steelblue", "gray")) +
+  theme_classic() +
+  labs(
+    title = "PAL vs. Paired Associates",
+    x = "Word Pairs Hard (PAL)",
+    y = "Paired Associates Test"
+  )
+
+# Combined plot with shared legend
+combined_kt_pal <- ggarrange(
+  plot_kt,
+  plot_pal,
+  ncol = 2,
+  common.legend = TRUE,
+  legend = "bottom"
+)
+
+# View the combined plot in RStudio
+print(combined_kt_pal)
+
+# Save as PNG
+png("Combined_KeepTrack_and_PAL_vs_PairedAssociates.png", width = 960, height = 480, res = 300)
+print(combined_kt_pal)
+dev.off()
+
+# ANCOVA Models
+analysis_data_kt <- subset(data, select = c(memory_totalcorrect, moca_list, KT_Total_Correct))
+ancova_model_kt <- ols(log(memory_totalcorrect + 0.001) ~ moca_list * KT_Total_Correct, data = analysis_data_kt)
+ancova_model_kt
+
+analysis_data_pal <- subset(data, select = c(memory_totalcorrect, moca_list, WP_Total_Hard_Correct))
+ancova_model_pal <- ols(log(memory_totalcorrect + 0.001) ~ moca_list * WP_Total_Hard_Correct, data = analysis_data_pal)
+ancova_model_pal
+
+```
+
+**Figure 1:** Interaction Plots
+
+The association between the Paired Associates Test (on the logscale) and Keep Track Task is different between those with MCI versus Robust MoCA (p =0.0005) with a steeper slope (meaning stronger correlation across Keep Track) in those with MCI; MoCA group also modifies the relationship between the Paired Associates Test and PAL (p=0.0116), with a not obvious, but similar pattern – the MCI group has a steeper slope.
+
+## Multiple Regression Plots
+
+### For Keep Track Task (A & B)
+
+```{r question 2 for keep track}
+#| message: false
+#| warning: false
+library(rms)     # for ols(), datadist(), Predict()
+library(Hmisc)   # needed for datadist()
+### this allows us to make pretty plots
+
+data$Keep_Track <- data$KT_Total_Correct
+data$hypertension <- data$health_medical_hypertension
+
+dd2 <-datadist(data)
+options(datadist='dd2')
+
+multiple.regression.kt <- ols(Keep_Track ~ age + sex + bmi + hypertension, data=data)
+multiple.regression.kt
+
+plot(anova(multiple.regression.kt), margin="P")
+plot(Predict(multiple.regression.kt))
+```
+
+### For PAL Task (C & D)
+
+```{r Q2 for PAL}
+#| message: false
+#| warning: false
+data$PAL <- data$WP_Total_Hard_Correct
+data$hypertension <- data$health_medical_hypertension
+
+dd <- datadist(data)
+options(datadist='dd')
+
+multiple.regression.wp <- ols(PAL ~ age + sex + bmi + hypertension, data=data)
+multiple.regression.wp
+
+
+plot(anova(multiple.regression.wp), margin = "P")
+plot(Predict(multiple.regression.wp))
+```
+
+**Figure 2:** Linear regression analysis for Keep Track
+
+\(A\) shows a statistically significant association between Keep Track Task scores and BMI and Age; with a decreasing score in older age and higher bmi (B). There is a statistically significant association between BMI, Sex and Age and PAL task scores (C); with decreasing scores in older ages and higher BMI and lower scores in males versus females (D). For both Keep Track and PAL, higher scores are better.
+
+# Discussion
+
+-   This project seeks to evaluate the relationship between neuropsychologic tests that measure impairment (MoCA) to tests that focus on specific types of memory and executive function.
+
+-   The relationship between short term memory and new memory and executive function differs by MoCA group; individuals with MCI have lower short-term memory and executive function scores and are more strongly correlated with short term memory.
+
+-   Regression results show that higher age and BMI are linked to statistically lower scores on both Keep Track and PAL.
+
+-   Males have statistically lower PAL scores compared to females.
+
+This project shows that cognitive tasks that measure short-term memory, new memory and executive functioning are sensitive to measuring cognitive functioning in normal adults, in both those with robust and cognitive impairment based on the MoCA test.
